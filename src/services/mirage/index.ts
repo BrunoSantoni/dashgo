@@ -28,7 +28,7 @@ export function makeServer() {
     }, // Gerar dados em massa
 
     seeds(server) {
-      server.createList('user', 200); // Gerar 200 usuários a partir da factory
+      server.createList('user', 10); // Gerar 200 usuários a partir da factory
     },
 
     routes() {
