@@ -1,50 +1,47 @@
-import { Box, Button, Checkbox, Flex, Heading, Icon, IconButton, Table, Tbody, Td, Text, Th, Thead, Tr, useBreakpointValue, Spinner } from "@chakra-ui/react";
-import Link from "next/link";
-import { useEffect } from "react";
+import { useState } from "react";
+import { Box, Button, Checkbox, Flex, Heading, Icon, IconButton, Table, Tbody, Td, Text, Th, Thead, Tr, useBreakpointValue, Spinner, Link } from "@chakra-ui/react";
+import NextLink from "next/link";
 import { RiAddLine, RiEditLine } from "react-icons/ri";
 import { Header } from "../../components/Header";
 import { Pagination } from "../../components/Pagination";
 import { Sidebar } from "../../components/Sidebar";
 
-import { useQuery } from 'react-query';
+import { getUsers, useUsers } from "../../services/hooks/useUsers";
+import { queryClient } from "../../services/queryClient";
 import { api } from "../../services/api";
+import { GetServerSideProps } from "next";
 
-type User = {
-  id: number;
-  name: string;
-  email: string;
-  createdAt: Date;
+type UserListProps = {
+  users: {
+    id: string;
+    name: string;
+    email: string;
+    createdAt: Date;
+  }
 };
 
-export default function UserList() {
-  const { data, isLoading, isFetching, error } = useQuery('users', async () => {
-    const { data } = await api.get('users');
-
-    // Trazer os dados já formatados
-    /* Cache local é automático -> Stale while Revalidate... A chamada para a API é feita enquanto dados 'obsoletos' são mostrados em tela
-    Apenas para evitar o usuário olhar uma tela branca, também já tem um revalidate on focus. */
-    const users: User[] = data.users.map(user => {
-      return {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        createdAt: new Date(user.createdAt).toLocaleDateString('pt-BR', {
-          day: '2-digit',
-          month: 'long',
-          year: 'numeric',
-        }),
-      };
-    });
-    
-    return users;
-  }, {
-    staleTime: 1000 * 5, // 5 seconds
-  });
+export default function UserList({ users }: UserListProps) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data, isLoading, isFetching, error } = useUsers(currentPage,
+    // {
+    //   initialData: users,
+    // }
+  );
 
   const isWideVersion = useBreakpointValue({
     base: false,
     lg: true,
   });
+
+  async function handlePrefetchUser(userId: string) {
+    await queryClient.prefetchQuery(['user', userId], async () => {
+      const response = await api.get(`users/${userId}`);
+
+      return response.data
+    }, {
+      staleTime: 1000 * 60 * 10 // 10 minutes
+    });
+  }
 
   return(
     <Box>
@@ -61,11 +58,11 @@ export default function UserList() {
               { !isLoading && isFetching && <Spinner size="sm" color="gray.500" ml="4" /> }
             </Heading>
 
-            <Link href="/users/create" passHref>
+            <NextLink href="/users/create" passHref>
               <Button as="a" size="sm" fontSize="sm" colorScheme="pink" leftIcon={<Icon as={RiAddLine} fontSize="20" />}>
                 Criar novo
               </Button>
-            </Link>
+            </NextLink>
           </Flex>
 
           { isLoading ? (
@@ -91,7 +88,7 @@ export default function UserList() {
                 </Thead>
 
                 <Tbody>
-                  {data.map(user => (
+                  {data.users.map(user => (
                       <Tr key={user.id}>
                         <Td px={["4", "4", "6"]}>
                           <Checkbox colorScheme="pink" />
@@ -99,7 +96,9 @@ export default function UserList() {
 
                         <Td>
                           <Box>
-                            <Text fontWeight="bold">{user.name}</Text>
+                            <Link color="purple.400" onMouseEnter={() => handlePrefetchUser(user.id)}>
+                              <Text fontWeight="bold">{user.name}</Text>
+                            </Link>
                             <Text fontSize="sm" color="gray.300">{user.email}</Text>
                           </Box>
                         </Td>
@@ -109,9 +108,9 @@ export default function UserList() {
                         </Td> }
 
                         <Td>
-                          <Link href="/users/edit" passHref>
+                          <NextLink href="/users/edit" passHref>
                             <IconButton aria-label="Editar" as="a" size="sm" fontSize="sm" colorScheme="purple" icon={<Icon as={RiEditLine} />} />
-                          </Link>
+                          </NextLink>
                         </Td>
                       </Tr>
                     ),
@@ -119,7 +118,7 @@ export default function UserList() {
                 </Tbody>
               </Table>
 
-            <Pagination />
+            <Pagination totalCountOfRegisters={data.totalCount} currentPage={currentPage} onPageChange={setCurrentPage} />
             </>
           ) }
         </Box>
@@ -127,3 +126,13 @@ export default function UserList() {
     </Box>
   );
 }
+
+// export const getServerSideProps: GetServerSideProps = async () => {
+//   const { users, totalCount } = await getUsers(1);
+
+//   return {
+//     props: {
+//       users
+//     }
+//   }
+// }
